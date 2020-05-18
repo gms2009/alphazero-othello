@@ -8,7 +8,7 @@ from game import Othello
 from typing import List, Tuple
 
 
-def generate_training_data(cfg: OthelloConfig, g: Othello, target_pis: np.array, final_returns: np.array) -> List[Tuple[np.array, np.array, float]]:
+def generate_training_data(cfg: OthelloConfig, g: Othello, target_pis: np.ndarray, final_returns: np.ndarray) -> List[Tuple[np.ndarray, np.ndarray, float]]:
     assert len(target_pis) == len(g)
     dq = deque(maxlen=cfg.total_input_channels//2)
     training_data = []  # list of (input_image, pi, z)
@@ -33,13 +33,13 @@ class ReplayBuffer(object):
         self.batch_size = cfg.batch_size
         self.buffer = buffer
 
-    def save_training_data(self, training_data: List[Tuple[np.array, np.array, float]]):
+    def save_training_data(self, training_data: List[Tuple[np.ndarray, np.ndarray, float]]):
         for data_point in training_data:
             if len(self.buffer) >= self.window_size:
                 self.buffer.pop(0)
             self.buffer.append(data_point)
 
-    def sample_batch(self) -> Tuple[np.array, np.array, np.array]:
+    def sample_batch(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         samples = random.sample(self.buffer, k=self.batch_size)
         image, pi, z = zip(*samples)
         return image, pi, z

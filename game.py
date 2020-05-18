@@ -33,10 +33,10 @@ class Othello(object):
     def num_distinct_actions(self) -> int:
         return self._game.num_distinct_actions()
 
-    def legal_actions(self) -> np.array:
+    def legal_actions(self) -> np.ndarray:
         return np.array(self._state.legal_actions())
 
-    def legal_actions_mask(self) -> np.array:
+    def legal_actions_mask(self) -> np.ndarray:
         mask = np.array(self._state.legal_actions_mask()).astype(np.bool)
         return mask
 
@@ -46,10 +46,10 @@ class Othello(object):
     def current_player(self) -> int:
         return self._state.current_player()
 
-    def current_state(self) -> np.array:
+    def current_state(self) -> np.ndarray:
         return self._make_image(self._state)
 
-    def history_state(self, index: int) -> np.array:
+    def history_state(self, index: int) -> np.ndarray:
         return self._make_image(self._history[index][0])
     
     def history_player(self, index: int) -> int:
@@ -66,10 +66,10 @@ class Othello(object):
         self._history.append((self._state, self.current_player, action))
         self._state = child
 
-    def returns(self) -> np.array:
+    def returns(self) -> np.ndarray:
         return np.array(self._state.returns())
 
-    def make_input_image(self, cfg: OthelloConfig) -> np.array:
+    def make_input_image(self, cfg: OthelloConfig) -> np.ndarray:
         image = np.zeros((cfg.total_input_channels, 8, 8), dtype=np.bool)
         image[-1] += bool(self.current_player())
         temp = self.current_state()
@@ -84,7 +84,7 @@ class Othello(object):
                 break
         return image
 
-    def _make_image(self, state: pyspiel.State) -> np.array:
+    def _make_image(self, state: pyspiel.State) -> np.ndarray:
         obs = np.array(state.observation_tensor()).reshape(3, 8, 8)
         obs = obs[1:]  # obs channels -> 0:black, 1:white
         obs = obs.astype(np.bool)
