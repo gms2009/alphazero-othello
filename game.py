@@ -52,7 +52,7 @@ class Othello(object):
     def history_state(self, index: int) -> np.array:
         return self._make_image(self._history[index][0])
     
-    def history_to_play(self, index: int) -> int:
+    def history_player(self, index: int) -> int:
         return self._history[index][1]
     
     def history_action(self, index: int) -> int:

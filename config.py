@@ -16,7 +16,7 @@ class OthelloConfig(object):
         # Training
         self.training_steps = int(100e3)
         self.checkpoint_interval = int(1e3)
-        self.window_size = int(1e3)
+        self.window_size = int(1e5)
         self.batch_size = 512
 
         self.weight_decay = 1e-4
