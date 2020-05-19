@@ -41,3 +41,6 @@ class OthelloConfig(object):
             0: "black",
             1: "white"
         }
+
+        # Messages
+        self.message_interrupt = 1

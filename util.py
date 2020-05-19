@@ -2,6 +2,7 @@ import random
 import numpy as np
 import torch
 from collections import deque
+from multiprocessing import Process, Queue
 
 from config import OthelloConfig
 from game import Othello
@@ -50,7 +51,7 @@ class Node(object):
     def game(self) -> Othello:
         return self._game
 
-    def sample_action(self) -> int:
+    def select_action(self) -> int:
         action_mask = self._game.legal_actions_mask()
         ucb = self._c_puct * self._P * (np.sqrt(self._N.sum())/(1+self._N))
         puct = self._Q + ucb
@@ -71,13 +72,39 @@ class Node(object):
         self._Q[action] = self._W[action]/self._N[action]
 
 
+class SelfPlayWorker(Process):
+    def __init__(self, message_queue: Queue, replay_buffer: ReplayBuffer, device_name: str):
+        self._message_queue = message_queue
+        self._replay_buffer = replay_buffer
+        self._device = torch.device(device_name)
+        self._network = Network().to(self._device).eval()
+        self._game = Othello()
+        self._cfg = OthelloConfig()
+
+    def run(self):
+        interrupted = False
+        while True:
+            if not self._message_queue.empty():
+                msg = self._message_queue.get()
+                if msg == self._cfg.message_interrupt:
+                    interrupted = True
+                del msg
+            if interrupted:
+                break
+            self._game.reset()
+            input_tensor = image_to_tensor(self._game.make_input_image(), self._device)
+            with torch.no_grad():
+                p, v = self._network.inference(input_tensor)
+            p, v = p.cpu().numpy(), v.cpu().numpy()
+
+
 def image_to_tensor(image: np.ndarray, device: torch.device) -> torch.Tensor:
     tensor = torch.as_tensor(image, dtype=torch.float32).to(device)
     return tensor
 
 
-def generate_training_data(cfg: OthelloConfig, g: Othello, target_pis: np.ndarray, final_returns: np.ndarray) -> List[Tuple[np.ndarray, np.ndarray, float]]:
-    assert len(target_pis) == len(g)
+def generate_training_data(cfg: OthelloConfig, g: Othello, target_policies: np.ndarray, final_returns: np.ndarray) -> List[Tuple[np.ndarray, np.ndarray, float]]:
+    assert len(target_policies) == len(g)
     dq = deque(maxlen=cfg.total_input_channels//2)
     training_data = []  # list of (input_image, pi, z)
     for _ in range(cfg.total_input_channels//2):
@@ -91,14 +118,14 @@ def generate_training_data(cfg: OthelloConfig, g: Othello, target_pis: np.ndarra
             x[ch] += img[0]
             x[(cfg.total_input_channels//2)+ch] += img[1]
         x[-1] += bool(player)
-        training_data.append((x, target_pis[i], final_returns[player]))
+        training_data.append((x, target_policies[i], final_returns[player]))
     return training_data
 
 
 def mcts(node: Node, cfg: OthelloConfig, network: Network, device: torch.device) -> np.ndarray:
     if Node.game().is_terminal():
         return Node.game().returns()
-    action = Node.sample_action()
+    action = Node.select_action()
     child = Node.child(action)
     if child is not None:
         returns = mcts(child, cfg, network, device)
