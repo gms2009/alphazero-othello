@@ -2,7 +2,6 @@ class OthelloConfig(object):
     def __init__(self):
         # Self-Play
         self.num_actors = 12
-        self.num_sampling_moves = 10
         self.max_moves = 512
         self.num_simulations = 500
 
@@ -12,6 +11,11 @@ class OthelloConfig(object):
 
         # UCB formula
         self.ucb_c_puct = 4
+
+        # Target policy params
+        self.tau_initial = 1
+        self.tau_final = 0.01
+        self.num_sampling_moves = 10
 
         # Training
         self.training_steps = int(100e3)

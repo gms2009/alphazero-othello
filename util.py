@@ -1,11 +1,18 @@
 import random
 import numpy as np
+import torch
 from collections import deque
 
 from config import OthelloConfig
 from game import Othello
+from model import Network
 
 from typing import List, Tuple
+
+
+def image_to_tensor(image: np.ndarray, device: torch.device) -> torch.Tensor:
+    tensor = torch.as_tensor(image, dtype=torch.float32).to(device)
+    return tensor
 
 
 def generate_training_data(cfg: OthelloConfig, g: Othello, target_pis: np.ndarray, final_returns: np.ndarray) -> List[Tuple[np.ndarray, np.ndarray, float]]:
@@ -43,3 +50,70 @@ class ReplayBuffer(object):
         samples = random.sample(self.buffer, k=self.batch_size)
         image, pi, z = zip(*samples)
         return image, pi, z
+
+
+class Node(object):
+    def __init__(self, cfg: OthelloConfig, game: Othello, action_probs: np.ndarray):
+        self._c_puct = cfg.ucb_c_puct
+        self._tau_initial = cfg.tau_initial
+        self._tau_final = cfg.tau_final
+        self._num_sampling_moves = cfg.num_sampling_moves
+        self._game = game
+        self._P = action_probs.copy()
+        self._N = np.zeros(self._game.num_distinct_actions(), dtype=np.int64)
+        self._Q = np.zeros(self._game.num_distinct_actions(), dtype=np.float32)
+        self._W = np.zeros(self._game.num_distinct_actions(), dtype=np.float32)
+        self._children = [None for _ in range(self._game.num_distinct_actions())]
+
+    def child(self, action: int) -> Node:
+        return self._children[action]
+
+    def update_child(self, child: Node, action: int):
+        self._children[action] = child
+
+    def game(self) -> Othello:
+        return self._game
+
+    def sample_action(self) -> int:
+        action_mask = self._game.legal_actions_mask()
+        ucb = self._c_puct * self._P * (np.sqrt(self._N.sum())/(1+self._N))
+        puct = self._Q + ucb
+        puct = action_mask * (1+puct) # add 1 for case when all values of puct are zero
+        return np.argmax(puct)
+
+    def get_policy(self) -> np.ndarray:
+        tau = self._tau_initial if len(self._game) <= self._num_sampling_moves else self._tau_final
+        action_mask = self._game.legal_actions_mask()
+        N = self._N**tau
+        if N.sum() == 0:
+            N += 1e-8
+        policy = action_mask * (N/N.sum())
+
+    def add_returns(self, action: int, returns: np.ndarray):
+        self._W[action] += returns[self._game.current_player]
+        self._N[action] += 1
+        self._Q[action] = self._W[action]/self._N[action]
+
+
+def mcts(node: Node, cfg: OthelloConfig, network: Network, device: torch.device) -> np.ndarray:
+    if Node.game().is_terminal():
+        return Node.game().returns()
+    action = Node.sample_action()
+    child = Node.child(action)
+    if child is not None:
+        returns = mcts(child, cfg, network, device)
+        node.add_returns(action, returns)
+        return returns
+    game = Node.game().clone()
+    game.apply_action(action)
+    state_tensor = image_to_tensor(game.current_state(), device)
+    with torch.no_grad():
+        p, v = network.inference(state_tensor)
+    p, v = p.cpu().numpy(), v.cpu().numpy()
+    child = Node(cfg, game, p)
+    node.update_child(child, action)
+    returns = np.empty(2, dtype=np.float32)
+    returns[game.current_player] = v
+    returns[1-game.current_player] = -v
+    node.add_returns(action, returns)
+    return returns

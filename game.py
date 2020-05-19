@@ -51,10 +51,10 @@ class Othello(object):
 
     def history_state(self, index: int) -> np.ndarray:
         return self._make_image(self._history[index][0])
-    
+
     def history_player(self, index: int) -> int:
         return self._history[index][1]
-    
+
     def history_action(self, index: int) -> int:
         return self._history[index][2]
 
@@ -67,7 +67,7 @@ class Othello(object):
         self._state = child
 
     def returns(self) -> np.ndarray:
-        return np.array(self._state.returns())
+        return np.array(self._state.returns()).astype(np.float32)
 
     def make_input_image(self, cfg: OthelloConfig) -> np.ndarray:
         image = np.zeros((cfg.total_input_channels, 8, 8), dtype=np.bool)

@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 
+from typing import List, Tuple
+
 
 class Flatten(nn.Module):
     def __init__(self):
@@ -62,14 +64,14 @@ class Network(nn.Module):
             nn.Tanh()
         )
 
-    def forward(self, images):
+    def forward(self, images: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         x = self._conv(x)
         x = self._residuals(x)
         p = self._policy_head(x)
         v = self._value_head(x)
         return p, v
 
-    def inference(self, image):
+    def inference(self, image: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         image.unsqueeze_(0)
         p, v = self.forward(image)
         p.squeeze_(0)
