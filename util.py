@@ -10,30 +10,6 @@ from model import Network
 from typing import List, Tuple
 
 
-def image_to_tensor(image: np.ndarray, device: torch.device) -> torch.Tensor:
-    tensor = torch.as_tensor(image, dtype=torch.float32).to(device)
-    return tensor
-
-
-def generate_training_data(cfg: OthelloConfig, g: Othello, target_pis: np.ndarray, final_returns: np.ndarray) -> List[Tuple[np.ndarray, np.ndarray, float]]:
-    assert len(target_pis) == len(g)
-    dq = deque(maxlen=cfg.total_input_channels//2)
-    training_data = []  # list of (input_image, pi, z)
-    for _ in range(cfg.total_input_channels//2):
-        dq.appendleft(np.zeros((2, 8, 8), dtype=np.bool))
-    for i in range(len(g)):
-        img = g.history_state(i)
-        player = g.history_player(i)
-        dq.appendleft(img)
-        x = np.zeros((cfg.total_input_channels, 8, 8), dtype=np.bool)
-        for ch, img in enumerate(dq):
-            x[ch] += img[0]
-            x[(cfg.total_input_channels//2)+ch] += img[1]
-        x[-1] += bool(player)
-        training_data.append((x, target_pis[i], final_returns[player]))
-    return training_data
-
-
 class ReplayBuffer(object):
     def __init__(self, cfg: OthelloConfig, buffer: list):
         self.window_size = cfg.window_size
@@ -93,6 +69,30 @@ class Node(object):
         self._W[action] += returns[self._game.current_player]
         self._N[action] += 1
         self._Q[action] = self._W[action]/self._N[action]
+
+
+def image_to_tensor(image: np.ndarray, device: torch.device) -> torch.Tensor:
+    tensor = torch.as_tensor(image, dtype=torch.float32).to(device)
+    return tensor
+
+
+def generate_training_data(cfg: OthelloConfig, g: Othello, target_pis: np.ndarray, final_returns: np.ndarray) -> List[Tuple[np.ndarray, np.ndarray, float]]:
+    assert len(target_pis) == len(g)
+    dq = deque(maxlen=cfg.total_input_channels//2)
+    training_data = []  # list of (input_image, pi, z)
+    for _ in range(cfg.total_input_channels//2):
+        dq.appendleft(np.zeros((2, 8, 8), dtype=np.bool))
+    for i in range(len(g)):
+        img = g.history_state(i)
+        player = g.history_player(i)
+        dq.appendleft(img)
+        x = np.zeros((cfg.total_input_channels, 8, 8), dtype=np.bool)
+        for ch, img in enumerate(dq):
+            x[ch] += img[0]
+            x[(cfg.total_input_channels//2)+ch] += img[1]
+        x[-1] += bool(player)
+        training_data.append((x, target_pis[i], final_returns[player]))
+    return training_data
 
 
 def mcts(node: Node, cfg: OthelloConfig, network: Network, device: torch.device) -> np.ndarray:
