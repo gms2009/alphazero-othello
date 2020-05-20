@@ -17,16 +17,17 @@ class ReplayBuffer(object):
         self.batch_size = cfg.batch_size
         self.buffer = buffer
 
-    def save_training_data(self, training_data: List[Tuple[np.ndarray, np.ndarray, float]]):
+    def save_training_data(self, training_data: List[Tuple[np.ndarray, np.ndarray, float, np.ndarray]]):
         for data_point in training_data:
             if len(self.buffer) >= self.window_size:
                 self.buffer.pop(0)
             self.buffer.append(data_point)
 
-    def sample_batch(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def sample_batch(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         samples = random.sample(self.buffer, k=self.batch_size)
-        image, pi, z = zip(*samples)
-        return image, pi, z
+        image, pi, z, actions_mask = zip(*samples)
+        return (np.array(image).astype(np.bool), np.array(pi).astype(np.float32), 
+        np.array(z).astype(np.float32), np.array(actions_mask).astype(np.bool))
 
 
 class Node(object):
@@ -56,7 +57,7 @@ class Node(object):
         ucb = self._c_puct * self._P * (np.sqrt(self._N.sum())/(1+self._N))
         puct = self._Q + ucb
         puct = action_mask * (1+puct) # add 1 for case when all values of puct are zero
-        return np.argmax(puct)
+        return int(puct.argmax())
 
     def get_policy(self) -> np.ndarray:
         tau = self._tau_initial if len(self._game) <= self._num_sampling_moves else self._tau_final
@@ -65,6 +66,7 @@ class Node(object):
         if N.sum() == 0:
             N += 1e-8
         policy = action_mask * (N/N.sum())
+        return policy
 
     def add_returns(self, action: int, returns: np.ndarray):
         self._W[action] += returns[self._game.current_player]
@@ -73,7 +75,7 @@ class Node(object):
 
 
 class SelfPlayWorker(Process):
-    def __init__(self, message_queue: Queue, replay_buffer: ReplayBuffer, device_name: str):
+    def __init__(self, message_queue: Queue, network_list: list, replay_buffer: ReplayBuffer, device_name: str):
         self._message_queue = message_queue
         self._replay_buffer = replay_buffer
         self._device = torch.device(device_name)
@@ -92,10 +94,26 @@ class SelfPlayWorker(Process):
             if interrupted:
                 break
             self._game.reset()
-            input_tensor = image_to_tensor(self._game.make_input_image(), self._device)
+            target_policies = []
+            state_tensor = image_to_tensor(self._game.make_input_image(), self._device)
             with torch.no_grad():
-                p, v = self._network.inference(input_tensor)
+                p, v = self._network.inference(state_tensor)
             p, v = p.cpu().numpy(), v.cpu().numpy()
+            node = Node(self._cfg, self._game, p)
+            while not self._game.is_terminal():
+                for _ in range(self._cfg.num_simulations):
+                    mcts(node, self._cfg, self._network, self._device)
+                target_policy = node.get_policy()
+                action = int(target_policy.argmax())
+                child = node.child(action)
+                target_policies.append(target_policy)
+                self._game = child.game()
+                node = child
+            final_returns = np.array(self._game.returns()).astype(np.float32)
+            target_policies = np.array(target_policies).astype(np.float32)
+            training_data = generate_training_data(self._cfg, self._game, target_policies, final_returns)
+            self._replay_buffer.save_training_data(training_data)
+        print(super().pid, "terminated.")
 
 
 def image_to_tensor(image: np.ndarray, device: torch.device) -> torch.Tensor:
@@ -103,22 +121,25 @@ def image_to_tensor(image: np.ndarray, device: torch.device) -> torch.Tensor:
     return tensor
 
 
-def generate_training_data(cfg: OthelloConfig, g: Othello, target_policies: np.ndarray, final_returns: np.ndarray) -> List[Tuple[np.ndarray, np.ndarray, float]]:
-    assert len(target_policies) == len(g)
+def generate_training_data(
+    cfg: OthelloConfig, game, target_policies: np.ndarray, final_returns: np.ndarray
+    ) -> List[Tuple[np.ndarray, np.ndarray, float, np.ndarray]]:
+    assert len(target_policies) == len(game)
     dq = deque(maxlen=cfg.total_input_channels//2)
-    training_data = []  # list of (input_image, pi, z)
+    training_data = []  # list of (input_image, pi, z, action_mask)
     for _ in range(cfg.total_input_channels//2):
         dq.appendleft(np.zeros((2, 8, 8), dtype=np.bool))
-    for i in range(len(g)):
-        img = g.history_state(i)
-        player = g.history_player(i)
+    for i in range(len(game)):
+        img = game.history_state(i)
+        player = game.history_player(i)
+        action_mask = game.history_actions_mask(i)
         dq.appendleft(img)
         x = np.zeros((cfg.total_input_channels, 8, 8), dtype=np.bool)
         for ch, img in enumerate(dq):
             x[ch] += img[0]
             x[(cfg.total_input_channels//2)+ch] += img[1]
         x[-1] += bool(player)
-        training_data.append((x, target_policies[i], final_returns[player]))
+        training_data.append((x, target_policies[i], float(final_returns[player]), action_mask))
     return training_data
 
 

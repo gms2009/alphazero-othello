@@ -34,7 +34,7 @@ class Othello(object):
         return self._game.num_distinct_actions()
 
     def legal_actions(self) -> np.ndarray:
-        return np.array(self._state.legal_actions())
+        return np.array(self._state.legal_actions()).astype(np.int64)
 
     def legal_actions_mask(self) -> np.ndarray:
         mask = np.array(self._state.legal_actions_mask()).astype(np.bool)
@@ -57,6 +57,9 @@ class Othello(object):
 
     def history_action(self, index: int) -> int:
         return self._history[index][2]
+
+    def history_actions_mask(self, index:int) -> np.ndarray:
+        return np.array(self._history[index][0].legal_actions_mask()).astype(bool)
 
     def is_terminal(self) -> bool:
         return self._state.is_terminal()
@@ -85,7 +88,6 @@ class Othello(object):
         return image
 
     def _make_image(self, state: pyspiel.State) -> np.ndarray:
-        obs = np.array(state.observation_tensor()).reshape(3, 8, 8)
+        obs = np.array(state.observation_tensor()).reshape(3, 8, 8).astype(np.bool)
         obs = obs[1:]  # obs channels -> 0:black, 1:white
-        obs = obs.astype(np.bool)
         return obs
