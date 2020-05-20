@@ -1,13 +1,14 @@
 import torch
 import torch.nn as nn
 
-from typing import List, Tuple
+from typing import Tuple
 
 
 class Flatten(nn.Module):
     def __init__(self):
         super().__init__()
 
+    # noinspection PyMethodMayBeStatic
     def forward(self, x):
         x = x.view(x.size(0), -1)
         return x
@@ -65,10 +66,10 @@ class Network(nn.Module):
         )
 
     def forward(self, images: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        x = self._conv(x)
-        x = self._residuals(x)
-        p = self._policy_head(x)
-        v = self._value_head(x)
+        images = self._conv(images)
+        images = self._residuals(images)
+        p = self._policy_head(images)
+        v = self._value_head(images)
         return p, v
 
     def inference(self, image: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:

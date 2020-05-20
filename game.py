@@ -1,6 +1,7 @@
-import random
+from __future__ import annotations
+
 import numpy as np
-import build.python.pyspiel as pyspiel
+import pyspiel
 
 from config import OthelloConfig
 
@@ -58,7 +59,7 @@ class Othello(object):
     def history_action(self, index: int) -> int:
         return self._history[index][2]
 
-    def history_actions_mask(self, index:int) -> np.ndarray:
+    def history_actions_mask(self, index: int) -> np.ndarray:
         return np.array(self._history[index][0].legal_actions_mask()).astype(bool)
 
     def is_terminal(self) -> bool:
@@ -77,17 +78,18 @@ class Othello(object):
         image[-1] += bool(self.current_player())
         temp = self.current_state()
         image[0] += temp[0]
-        image[cfg.num_history_states+0] += temp[1]
-        for i in range(1, cfg.num_history_states+1):
+        image[cfg.num_history_states + 0] += temp[1]
+        for i in range(1, cfg.num_history_states + 1):
             try:
                 temp = self.history_state(-i)
                 image[i] += temp[0]
-                image[cfg.num_history_states+i] += temp[1]
+                image[cfg.num_history_states + i] += temp[1]
             except IndexError:
                 break
         return image
 
-    def _make_image(self, state: pyspiel.State) -> np.ndarray:
-        obs = np.array(state.observation_tensor()).reshape(3, 8, 8).astype(np.bool)
+    @staticmethod
+    def _make_image(state: pyspiel.State) -> np.ndarray:
+        obs = np.array(state.observation_tensor()).reshape((3, 8, 8)).astype(np.bool)
         obs = obs[1:]  # obs channels -> 0:black, 1:white
         return obs
