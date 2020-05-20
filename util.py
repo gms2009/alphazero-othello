@@ -75,8 +75,9 @@ class Node(object):
 
 
 class SelfPlayWorker(Process):
-    def __init__(self, message_queue: Queue, network_list: list, replay_buffer: ReplayBuffer, device_name: str):
+    def __init__(self, message_queue: Queue, state_dict_list: list, replay_buffer: ReplayBuffer, device_name: str):
         self._message_queue = message_queue
+        self._state_dict_list = state_dict_list
         self._replay_buffer = replay_buffer
         self._device = torch.device(device_name)
         self._network = Network().to(self._device).eval()
@@ -93,6 +94,9 @@ class SelfPlayWorker(Process):
                 del msg
             if interrupted:
                 break
+            self._network.load_state_dict(
+                torch.load(self._state_dict_list[0], map_location=self._device)
+            )
             self._game.reset()
             target_policies = []
             state_tensor = image_to_tensor(self._game.make_input_image(), self._device)
@@ -113,7 +117,7 @@ class SelfPlayWorker(Process):
             target_policies = np.array(target_policies).astype(np.float32)
             training_data = generate_training_data(self._cfg, self._game, target_policies, final_returns)
             self._replay_buffer.save_training_data(training_data)
-        print(super().pid, "terminated.")
+        print("SelfPlayWorker-", super().name, "terminated.")
 
 
 def image_to_tensor(image: np.ndarray, device: torch.device) -> torch.Tensor:
