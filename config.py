@@ -1,5 +1,8 @@
+import os
+
+
 class OthelloConfig(object):
-    def __init__(self):
+    def __init__(self, experiment: int = 1, batch: int = 1):
         # Self-Play
         self.num_actors = 12
         self.max_moves = 512
@@ -46,5 +49,11 @@ class OthelloConfig(object):
         self.message_interrupt = 1
 
         # Directories
-        self.dir_log = "logs"
-        self.dir_saved_models = "saved_models"
+        experiment_str = "experiment-" + str(experiment) + "-batch-" + str(batch)
+        self.dir_log = os.path.join("logs", experiment_str)
+        os.makedirs(self.dir_log, exist_ok=True)
+        self.dir_saved_models = os.path.join("saved_models", experiment_str)
+        os.makedirs(self.dir_saved_models, exist_ok=True)
+        self.dir_gs = os.path.join(self.dir_saved_models, "gs.pkl")
+        self.dir_network = os.path.join(self.dir_saved_models, "network.pt")
+        self.dir_optim = os.path.join(self.dir_saved_models, "optim.pt")

@@ -1,12 +1,14 @@
 from __future__ import annotations
 from typing import List, Tuple, Union, OrderedDict, Dict
 
-import time
-import random
-import numpy as np
-import torch
 from collections import deque
-from multiprocessing import Process, Queue
+import numpy as np
+import pickle
+import random
+import time
+import torch
+from torch.multiprocessing import Process, Queue
+from torch.utils.tensorboard import SummaryWriter
 
 from config import OthelloConfig
 from game import Othello
@@ -84,7 +86,7 @@ class Node(object):
 class SelfPlayWorker(Process):
     def __init__(
             self, message_queue: Queue,
-            shared_state_dicts: Dict[str, Union[Dict[str, torch.Tensor], OrderedDict[str, torch.Tensor]]],
+            shared_state_dicts: Dict[str, Union[Dict[str, torch.Tensor], OrderedDict[str, torch.Tensor], int]],
             replay_buffer: ReplayBuffer, device_name: str
     ):
         super().__init__()
@@ -106,9 +108,13 @@ class SelfPlayWorker(Process):
                 del msg
             if interrupted:
                 break
-            self._network.load_state_dict(
-                torch.load(self._shared_state_dicts["network"], map_location=self._device)
-            )
+            try:
+                state_dict = self._shared_state_dicts["network"]
+                for k, v in state_dict:
+                    state_dict[k] = v.to(self._device)
+                self._network.load_state_dict(state_dict)
+            finally:
+                del state_dict
             self._game.reset()
             target_policies = []
             state_tensor = image_to_tensor(self._game.make_input_image(self._cfg), self._device)
@@ -135,24 +141,37 @@ class SelfPlayWorker(Process):
 class TrainingWorker(Process):
     def __init__(
             self, message_queue: Queue,
-            shared_state_dicts: Dict[str, Union[Dict[str, torch.Tensor], OrderedDict[str, torch.Tensor]]],
-            replay_buffer: ReplayBuffer, device_name: str
+            shared_state_dicts: Dict[str, Union[Dict[str, torch.Tensor], OrderedDict[str, torch.Tensor], int]],
+            replay_buffer: ReplayBuffer, device_name: str, experiment: int, batch: int, resume: bool
     ):
         super().__init__()
         self._message_queue = message_queue
         self._shared_state_dicts = shared_state_dicts
         self._replay_buffer = replay_buffer
-        self._cfg = OthelloConfig()
+        self._cfg = OthelloConfig(experiment, batch)
         self._device = torch.device(device_name)
         self._network = Network().to(self._device).train()
         self._optim = torch.optim.rmsprop.RMSprop(
             self._network.parameters(), lr=self._cfg.learning_rate_schedule[0], weight_decay=self._cfg.weight_decay
         )
+        self._gs = 1
+        if resume:
+            with open(self._cfg.dir_gs, "rb") as f:
+                self._gs = pickle.load(f)
+            self._network.load_state_dict(torch.load(self._cfg.dir_network, map_location=self._device))
+            self._optim.load_state_dict(torch.load(self._cfg.dir_optim, map_location=self._device))
+        self._writer = SummaryWriter(self._cfg.dir_log)
 
     def run(self):
-        self._network.load_state_dict(torch.load(self._shared_state_dicts["network"], map_location=self._device))
-        self._optim.load_state_dict(torch.load(self._shared_state_dicts["optim"], map_location=self._device))
         for epoch in range(self._cfg.training_steps):
+            interrupted = False
+            if not self._message_queue.empty():
+                msg = self._message_queue.get()
+                if msg == self._cfg.message_interrupt:
+                    interrupted = True
+                del msg
+            if interrupted:
+                break
             while self._replay_buffer.empty():
                 time.sleep(1.0)
             images, target_action_probs, target_values, action_masks = self._replay_buffer.sample_batch()
@@ -163,12 +182,23 @@ class TrainingWorker(Process):
             self._optim.zero_grad()
             predicted_action_probs, predicted_values = self._network(images)
             predicted_values = filter_legal_action_probs(predicted_action_probs, action_masks)
-            loss = calculate_loss(predicted_action_probs, predicted_values, target_action_probs, target_values)
-            loss.backward()
+            policy_loss, value_loss, total_loss = calculate_loss(predicted_action_probs, predicted_values,
+                                                                 target_action_probs, target_values)
+            total_loss.backward()
             self._optim.step()
             network_state_dict, optim_state_dict = self.state_dicts()
             self._shared_state_dicts["network"] = network_state_dict
             self._shared_state_dicts["optim"] = optim_state_dict
+            self._writer.add_scalar("losses/policy_loss", policy_loss.item(), self._gs)
+            self._writer.add_scalar("losses/value_loss", value_loss.item(), self._gs)
+            self._writer.add_scalar("losses/total_loss", total_loss.item(), self._gs)
+            self._gs += 1
+            if (epoch+1) % self._cfg.checkpoint_interval == 0:
+                with open(self._cfg.dir_gs, "wb") as f:
+                    pickle.dump(self._gs, f)
+                torch.save(self._network.state_dict(), self._cfg.dir_network)
+                torch.save(self._optim.state_dict(), self._cfg.dir_optim)
+        print("TrainingWorker terminated.")
 
     def state_dicts(self) -> Tuple[OrderedDict[str, torch.Tensor], Dict[str, torch.Tensor]]:
         network_state_dict = self._network.state_dict()
@@ -194,11 +224,11 @@ def filter_legal_action_probs(action_probs: torch.Tensor, action_mask: torch.Ten
 def calculate_loss(
         predicted_action_probs: torch.Tensor, predicted_values: torch.Tensor,
         target_action_probs: torch.Tensor, target_values: torch.Tensor
-) -> torch.Tensor:
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     value_loss = torch.square(target_values - predicted_values)
     policy_loss = target_action_probs.T @ torch.log(predicted_action_probs)
     final_loss = value_loss - policy_loss
-    return final_loss
+    return -policy_loss.mean(), value_loss.mean(), final_loss.mean()
 
 
 def generate_training_data(
