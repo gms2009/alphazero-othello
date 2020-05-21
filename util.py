@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Tuple, Dict, Union
+from typing import List, Tuple, Union, OrderedDict, Dict
 
 import time
 import random
@@ -83,11 +83,12 @@ class Node(object):
 
 class SelfPlayWorker(Process):
     def __init__(
-            self, message_queue: Queue, state_dict_list: List[Dict], replay_buffer: ReplayBuffer, device_name: str
+            self, message_queue: Queue, shared_state_dicts: Dict[str, Union[Dict, OrderedDict[str, torch.Tensor]]],
+            replay_buffer: ReplayBuffer, device_name: str
     ):
         super().__init__()
         self._message_queue = message_queue
-        self._state_dict_list = state_dict_list
+        self._shared_state_dicts = shared_state_dicts
         self._replay_buffer = replay_buffer
         self._cfg = OthelloConfig()
         self._device = torch.device(device_name)
@@ -105,7 +106,7 @@ class SelfPlayWorker(Process):
             if interrupted:
                 break
             self._network.load_state_dict(
-                torch.load(self._state_dict_list[0], map_location=self._device)
+                torch.load(self._shared_state_dicts["network"], map_location=self._device)
             )
             self._game.reset()
             target_policies = []
@@ -132,11 +133,12 @@ class SelfPlayWorker(Process):
 
 class TrainingWorker(Process):
     def __init__(
-            self, message_queue: Queue, state_dict_list: List[Dict], replay_buffer: ReplayBuffer, device_name: str
+            self, message_queue: Queue, shared_state_dicts: Dict[str, Union[Dict, OrderedDict[str, torch.Tensor]]],
+            replay_buffer: ReplayBuffer, device_name: str
     ):
         super().__init__()
         self._message_queue = message_queue
-        self._state_dict_list = state_dict_list
+        self._shared_state_dicts = shared_state_dicts
         self._replay_buffer = replay_buffer
         self._cfg = OthelloConfig()
         self._device = torch.device(device_name)
@@ -146,8 +148,8 @@ class TrainingWorker(Process):
         )
 
     def run(self):
-        self._network.load_state_dict(torch.load(self._state_dict_list[0], map_location=self._device))
-        self._optim.load_state_dict(torch.load(self._state_dict_list[1], map_location=self._device))
+        self._network.load_state_dict(torch.load(self._shared_state_dicts["network"], map_location=self._device))
+        self._optim.load_state_dict(torch.load(self._shared_state_dicts["optim"], map_location=self._device))
         for epoch in range(self._cfg.training_steps):
             while self._replay_buffer.empty():
                 time.sleep(1.0)
@@ -162,6 +164,18 @@ class TrainingWorker(Process):
             loss = calculate_loss(predicted_action_probs, predicted_values, target_action_probs, target_values)
             loss.backward()
             self._optim.step()
+            network_state_dict, optim_state_dict = self.state_dicts()
+            self._shared_state_dicts["network"] = network_state_dict
+            self._shared_state_dicts["optim"] = optim_state_dict
+
+    def state_dicts(self) -> Tuple[OrderedDict[str, torch.Tensor], Dict]:
+        network_state_dict = self._network.state_dict()
+        optim_state_dict = self._optim.state_dict()
+        for k, v in network_state_dict:
+            network_state_dict[k] = v.cpu()
+        for k, v in optim_state_dict:
+            optim_state_dict[k] = v.cpu()
+        return network_state_dict, optim_state_dict
 
 
 def image_to_tensor(image: np.ndarray, device: torch.device) -> torch.Tensor:
@@ -180,7 +194,7 @@ def calculate_loss(
         target_action_probs: torch.Tensor, target_values: torch.Tensor
 ) -> torch.Tensor:
     value_loss = torch.square(target_values - predicted_values)
-    policy_loss = (target_action_probs.T @ torch.log(predicted_action_probs)).sum(dim=1)
+    policy_loss = target_action_probs.T @ torch.log(predicted_action_probs)
     final_loss = value_loss - policy_loss
     return final_loss
 
