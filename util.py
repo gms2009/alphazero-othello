@@ -69,7 +69,6 @@ class Node(object):
 
     def get_policy(self) -> np.ndarray:
         tau = self._tau_initial if len(self._game) <= self._num_sampling_moves else self._tau_final
-        action_mask = self._game.legal_actions_mask()
         n = self._N ** tau
         if n.sum() == 0:
             n += 1e-8
@@ -90,10 +89,10 @@ class SelfPlayWorker(Process):
         self._message_queue = message_queue
         self._state_dict_list = state_dict_list
         self._replay_buffer = replay_buffer
+        self._cfg = OthelloConfig()
         self._device = torch.device(device_name)
         self._network = Network().to(self._device).eval()
         self._game = Othello()
-        self._cfg = OthelloConfig()
 
     def run(self):
         interrupted = False
@@ -139,12 +138,12 @@ class TrainingWorker(Process):
         self._message_queue = message_queue
         self._state_dict_list = state_dict_list
         self._replay_buffer = replay_buffer
+        self._cfg = OthelloConfig()
         self._device = torch.device(device_name)
         self._network = Network().to(self._device).train()
         self._optim = torch.optim.rmsprop.RMSprop(
             self._network.parameters(), lr=self._cfg.learning_rate_schedule[0], weight_decay=self._cfg.weight_decay
         )
-        self._cfg = OthelloConfig()
 
     def run(self):
         self._network.load_state_dict(torch.load(self._state_dict_list[0], map_location=self._device))
