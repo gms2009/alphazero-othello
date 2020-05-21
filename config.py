@@ -5,7 +5,7 @@ class OthelloConfig(object):
         self.max_moves = 512
         self.num_simulations = 500
 
-        # Root prior expoloration noise
+        # Root prior exploration noise
         self.root_dirichlet_alpha = 0.5
         self.root_exploration_fraction = 0.25
 
@@ -44,3 +44,7 @@ class OthelloConfig(object):
 
         # Messages
         self.message_interrupt = 1
+
+        # Directories
+        self.dir_log = "logs"
+        self.dir_saved_models = "saved_models"

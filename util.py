@@ -1,6 +1,7 @@
 from __future__ import annotations
-from typing import List, Tuple, Union
+from typing import List, Tuple, Dict, Union
 
+import time
 import random
 import numpy as np
 import torch
@@ -14,18 +15,24 @@ from model import Network
 
 class ReplayBuffer(object):
     def __init__(self, cfg: OthelloConfig, buffer: list):
-        self.window_size = cfg.window_size
-        self.batch_size = cfg.batch_size
-        self.buffer = buffer
+        self._window_size = cfg.window_size
+        self._batch_size = cfg.batch_size
+        self._buffer = buffer
+
+    def __len__(self) -> int:
+        return len(self._buffer)
+
+    def empty(self) -> bool:
+        return len(self) < self._batch_size
 
     def save_training_data(self, training_data: List[Tuple[np.ndarray, np.ndarray, float, np.ndarray]]):
         for data_point in training_data:
-            if len(self.buffer) >= self.window_size:
-                self.buffer.pop(0)
-            self.buffer.append(data_point)
+            if len(self._buffer) >= self._window_size:
+                self._buffer.pop(0)
+            self._buffer.append(data_point)
 
     def sample_batch(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        samples = random.sample(self.buffer, k=self.batch_size)
+        samples = random.sample(self._buffer, k=self._batch_size)
         image, pi, z, actions_mask = zip(*samples)
         return (np.array(image).astype(np.bool), np.array(pi).astype(np.float32),
                 np.array(z).astype(np.float32), np.array(actions_mask).astype(np.bool))
@@ -66,7 +73,7 @@ class Node(object):
         n = self._N ** tau
         if n.sum() == 0:
             n += 1e-8
-        policy = action_mask * (n / n.sum())
+        policy = n / n.sum()
         return policy
 
     def add_returns(self, action: int, returns: np.ndarray):
@@ -76,7 +83,9 @@ class Node(object):
 
 
 class SelfPlayWorker(Process):
-    def __init__(self, message_queue: Queue, state_dict_list: list, replay_buffer: ReplayBuffer, device_name: str):
+    def __init__(
+            self, message_queue: Queue, state_dict_list: List[Dict], replay_buffer: ReplayBuffer, device_name: str
+    ):
         super().__init__()
         self._message_queue = message_queue
         self._state_dict_list = state_dict_list
@@ -122,9 +131,59 @@ class SelfPlayWorker(Process):
         print("SelfPlayWorker-", super().name, "terminated.")
 
 
+class TrainingWorker(Process):
+    def __init__(
+            self, message_queue: Queue, state_dict_list: List[Dict], replay_buffer: ReplayBuffer, device_name: str
+    ):
+        super().__init__()
+        self._message_queue = message_queue
+        self._state_dict_list = state_dict_list
+        self._replay_buffer = replay_buffer
+        self._device = torch.device(device_name)
+        self._network = Network().to(self._device).train()
+        self._optim = torch.optim.rmsprop.RMSprop(
+            self._network.parameters(), lr=self._cfg.learning_rate_schedule[0], weight_decay=self._cfg.weight_decay
+        )
+        self._cfg = OthelloConfig()
+
+    def run(self):
+        self._network.load_state_dict(torch.load(self._state_dict_list[0], map_location=self._device))
+        self._optim.load_state_dict(torch.load(self._state_dict_list[1], map_location=self._device))
+        for epoch in range(self._cfg.training_steps):
+            while self._replay_buffer.empty():
+                time.sleep(1.0)
+            images, target_action_probs, target_values, action_masks = self._replay_buffer.sample_batch()
+            images = image_to_tensor(images, self._device)
+            target_action_probs = torch.as_tensor(target_action_probs, dtype=torch.float32).to(self._device)
+            target_values = torch.as_tensor(target_values, dtype=torch.float32).to(self._device)
+            action_masks = torch.as_tensor(action_masks, dtype=torch.float32).to(self._device)
+            self._optim.zero_grad()
+            predicted_action_probs, predicted_values = self._network(images)
+            predicted_values = filter_legal_action_probs(predicted_action_probs, action_masks)
+            loss = calculate_loss(predicted_action_probs, predicted_values, target_action_probs, target_values)
+            loss.backward()
+            self._optim.step()
+
+
 def image_to_tensor(image: np.ndarray, device: torch.device) -> torch.Tensor:
     tensor = torch.as_tensor(image, dtype=torch.float32).to(device)
     return tensor
+
+
+def filter_legal_action_probs(action_probs: torch.Tensor, action_mask: torch.Tensor) -> torch.Tensor:
+    action_probs = action_probs + 0.01  # for case when all legal actions sum to zero
+    masked_probs = action_mask * action_probs
+    return masked_probs / masked_probs.sum(dim=1, keepdim=True)
+
+
+def calculate_loss(
+        predicted_action_probs: torch.Tensor, predicted_values: torch.Tensor,
+        target_action_probs: torch.Tensor, target_values: torch.Tensor
+) -> torch.Tensor:
+    value_loss = torch.square(target_values - predicted_values)
+    policy_loss = (target_action_probs.T @ torch.log(predicted_action_probs)).sum(dim=1)
+    final_loss = value_loss - policy_loss
+    return final_loss
 
 
 def generate_training_data(
