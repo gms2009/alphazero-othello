@@ -83,7 +83,8 @@ class Node(object):
 
 class SelfPlayWorker(Process):
     def __init__(
-            self, message_queue: Queue, shared_state_dicts: Dict[str, Union[Dict, OrderedDict[str, torch.Tensor]]],
+            self, message_queue: Queue,
+            shared_state_dicts: Dict[str, Union[Dict[str, torch.Tensor], OrderedDict[str, torch.Tensor]]],
             replay_buffer: ReplayBuffer, device_name: str
     ):
         super().__init__()
@@ -133,7 +134,8 @@ class SelfPlayWorker(Process):
 
 class TrainingWorker(Process):
     def __init__(
-            self, message_queue: Queue, shared_state_dicts: Dict[str, Union[Dict, OrderedDict[str, torch.Tensor]]],
+            self, message_queue: Queue,
+            shared_state_dicts: Dict[str, Union[Dict[str, torch.Tensor], OrderedDict[str, torch.Tensor]]],
             replay_buffer: ReplayBuffer, device_name: str
     ):
         super().__init__()
@@ -168,7 +170,7 @@ class TrainingWorker(Process):
             self._shared_state_dicts["network"] = network_state_dict
             self._shared_state_dicts["optim"] = optim_state_dict
 
-    def state_dicts(self) -> Tuple[OrderedDict[str, torch.Tensor], Dict]:
+    def state_dicts(self) -> Tuple[OrderedDict[str, torch.Tensor], Dict[str, torch.Tensor]]:
         network_state_dict = self._network.state_dict()
         optim_state_dict = self._optim.state_dict()
         for k, v in network_state_dict:
