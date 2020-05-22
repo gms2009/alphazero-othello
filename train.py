@@ -17,7 +17,7 @@ def train(experiment: int, batch: int, resume: bool):
     shared_state_dicts = manager.dict()
     message_queue = Queue()
     device_names_sp = ["cpu"] * cfg.num_self_play_workers
-    device_name_tw = "gpu"
+    device_name_tw = "cuda"
     training_worker = TrainingWorker(message_queue, shared_state_dicts, replay_buffer, device_name_tw, experiment,
                                      batch, resume)
     self_play_workers = []
