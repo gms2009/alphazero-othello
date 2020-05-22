@@ -102,13 +102,6 @@ class SelfPlayWorker(Process):
     def run(self):
         interrupted = False
         while True:
-            if not self._message_queue.empty():
-                msg = self._message_queue.get()
-                if msg == self._cfg.message_interrupt:
-                    interrupted = True
-                del msg
-            if interrupted:
-                break
             try:
                 state_dict = self._shared_state_dicts["network"]
                 for k, v in state_dict.items():
@@ -124,6 +117,13 @@ class SelfPlayWorker(Process):
             p, v = p.cpu().numpy(), v.cpu().numpy()
             node = Node(self._cfg, self._game, p)
             while not self._game.is_terminal():
+                if not self._message_queue.empty():
+                    msg = self._message_queue.get()
+                    if msg == self._cfg.message_interrupt:
+                        interrupted = True
+                    del msg
+                if interrupted:
+                    break
                 for _ in range(self._cfg.num_simulations):
                     mcts(node, self._cfg, self._network, self._device)
                 target_policy = node.get_policy()
@@ -132,6 +132,8 @@ class SelfPlayWorker(Process):
                 target_policies.append(target_policy)
                 self._game = child.game()
                 node = child
+            if interrupted:
+                break
             final_returns = np.array(self._game.returns()).astype(np.float32)
             target_policies = np.array(target_policies).astype(np.float32)
             training_data = generate_training_data(self._cfg, self._game, target_policies, final_returns)
@@ -165,9 +167,7 @@ class TrainingWorker(Process):
             self._optim.load_state_dict(torch.load(self._cfg.dir_optim, map_location=self._device))
         self._writer = SummaryWriter(self._cfg.dir_log)
         print("Training worker created.\nWriting state dicts to shared_state_dicts...")
-        network_state_dict, optim_state_dict = self.state_dicts()
-        self._shared_state_dicts["network"] = network_state_dict
-        self._shared_state_dicts["optim"] = optim_state_dict
+        self._shared_state_dicts["network"] = self.network_state_dict()
         print("Successfully written state dicts.")
 
     def run(self):
@@ -194,9 +194,7 @@ class TrainingWorker(Process):
                                                                  target_action_probs, target_values)
             total_loss.backward()
             self._optim.step()
-            network_state_dict, optim_state_dict = self.state_dicts()
-            self._shared_state_dicts["network"] = network_state_dict
-            self._shared_state_dicts["optim"] = optim_state_dict
+            self._shared_state_dicts["network"] = self.network_state_dict()
             self._writer.add_scalar("losses/policy_loss", policy_loss.item(), self._gs)
             self._writer.add_scalar("losses/value_loss", value_loss.item(), self._gs)
             self._writer.add_scalar("losses/total_loss", total_loss.item(), self._gs)
@@ -208,14 +206,11 @@ class TrainingWorker(Process):
                 torch.save(self._optim.state_dict(), self._cfg.dir_optim)
         print("TrainingWorker terminated.")
 
-    def state_dicts(self) -> Tuple[OrderedDict[str, torch.Tensor], Dict[str, torch.Tensor]]:
+    def network_state_dict(self) -> OrderedDict[str, torch.Tensor]:
         network_state_dict = self._network.state_dict()
-        optim_state_dict = self._optim.state_dict()
         for k, v in network_state_dict.items():
             network_state_dict[k] = v.cpu()
-        for k, v in optim_state_dict.items():
-            optim_state_dict[k] = v.cpu()
-        return network_state_dict, optim_state_dict
+        return network_state_dict
 
 
 def image_to_tensor(image: np.ndarray, device: torch.device) -> torch.Tensor:
