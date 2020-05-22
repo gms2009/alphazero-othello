@@ -267,7 +267,7 @@ def mcts(node: Node, cfg: OthelloConfig, network: Network, device: torch.device)
         return returns
     game = node.game().clone()
     game.apply_action(action)
-    state_tensor = image_to_tensor(game.current_state(), device)
+    state_tensor = image_to_tensor(game.make_input_image(cfg), device)
     with torch.no_grad():
         p, v = network.inference(state_tensor)
     p, v = p.cpu().numpy(), v.cpu().numpy()
