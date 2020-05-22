@@ -152,7 +152,8 @@ class TrainingWorker(Process):
         self._cfg = OthelloConfig(experiment, batch)
         self._device = torch.device(device_name)
         self._network = Network().to(self._device).train()
-        self._optim = torch.optim.rmsprop.RMSprop(
+        # noinspection PyUnresolvedReferences
+        self._optim = torch.optim.RMSprop(
             self._network.parameters(), lr=self._cfg.learning_rate_schedule[0], weight_decay=self._cfg.weight_decay
         )
         self._gs = 1
