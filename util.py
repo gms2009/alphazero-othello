@@ -16,7 +16,8 @@ from model import Network
 
 
 class ReplayBuffer(object):
-    def __init__(self, cfg: OthelloConfig, buffer: list):
+    def __init__(self, buffer: list):
+        cfg = OthelloConfig()
         self._window_size = cfg.window_size
         self._batch_size = cfg.batch_size
         self._buffer = buffer
@@ -156,11 +157,17 @@ class TrainingWorker(Process):
         )
         self._gs = 1
         if resume:
+            print("Loading parameters to resume training...")
             with open(self._cfg.dir_gs, "rb") as f:
                 self._gs = pickle.load(f)
             self._network.load_state_dict(torch.load(self._cfg.dir_network, map_location=self._device))
             self._optim.load_state_dict(torch.load(self._cfg.dir_optim, map_location=self._device))
         self._writer = SummaryWriter(self._cfg.dir_log)
+        print("Training worker created.\nWriting state dicts to shared_state_dicts...")
+        network_state_dict, optim_state_dict = self.state_dicts()
+        self._shared_state_dicts["network"] = network_state_dict
+        self._shared_state_dicts["optim"] = optim_state_dict
+        print("Successfully written state dicts.")
 
     def run(self):
         for epoch in range(self._cfg.training_steps):
@@ -193,7 +200,7 @@ class TrainingWorker(Process):
             self._writer.add_scalar("losses/value_loss", value_loss.item(), self._gs)
             self._writer.add_scalar("losses/total_loss", total_loss.item(), self._gs)
             self._gs += 1
-            if (epoch+1) % self._cfg.checkpoint_interval == 0:
+            if (epoch + 1) % self._cfg.checkpoint_interval == 0:
                 with open(self._cfg.dir_gs, "wb") as f:
                     pickle.dump(self._gs, f)
                 torch.save(self._network.state_dict(), self._cfg.dir_network)

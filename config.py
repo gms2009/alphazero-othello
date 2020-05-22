@@ -4,7 +4,7 @@ import os
 class OthelloConfig(object):
     def __init__(self, experiment: int = 1, batch: int = 1):
         # Self-Play
-        self.num_actors = 12
+        self.num_self_play_workers = 12
         self.max_moves = 512
         self.num_simulations = 500
 
