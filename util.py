@@ -111,7 +111,7 @@ class SelfPlayWorker(Process):
                 break
             try:
                 state_dict = self._shared_state_dicts["network"]
-                for k, v in state_dict:
+                for k, v in state_dict.items():
                     state_dict[k] = v.to(self._device)
                 self._network.load_state_dict(state_dict)
             finally:
@@ -211,9 +211,9 @@ class TrainingWorker(Process):
     def state_dicts(self) -> Tuple[OrderedDict[str, torch.Tensor], Dict[str, torch.Tensor]]:
         network_state_dict = self._network.state_dict()
         optim_state_dict = self._optim.state_dict()
-        for k, v in network_state_dict:
+        for k, v in network_state_dict.items():
             network_state_dict[k] = v.cpu()
-        for k, v in optim_state_dict:
+        for k, v in optim_state_dict.items():
             optim_state_dict[k] = v.cpu()
         return network_state_dict, optim_state_dict
 
