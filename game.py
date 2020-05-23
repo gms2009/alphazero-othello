@@ -10,7 +10,7 @@ class Othello(object):
     def __init__(self):
         self._game = pyspiel.load_game("othello")
         self._state = self._game.new_initial_state()
-        self._history = []  # list of (state, current_player, action)
+        self._history = []  # list of [state, current_player, action]
 
     def __str__(self):
         return self._state.__str__()
@@ -67,7 +67,7 @@ class Othello(object):
 
     def apply_action(self, action: int):
         child = self._state.child(action)
-        self._history.append((self._state, self.current_player, action))
+        self._history.append([self._state, self.current_player(), action])
         self._state = child
 
     def returns(self) -> np.ndarray:

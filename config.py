@@ -4,9 +4,10 @@ import os
 class OthelloConfig(object):
     def __init__(self, experiment: int = 1, batch: int = 1):
         # Self-Play
-        self.num_self_play_workers = 12
+        self.num_self_play_workers = 10
         self.max_moves = 512
-        self.num_simulations = 500
+        self.num_simulations = 800
+        self.device_names_sp = ["cpu"] * self.num_self_play_workers
 
         # Root prior exploration noise
         self.root_dirichlet_alpha = 0.5
@@ -21,10 +22,11 @@ class OthelloConfig(object):
         self.num_sampling_moves = 10
 
         # Training
-        self.training_steps = int(100e3)
-        self.checkpoint_interval = int(1e3)
-        self.window_size = int(1e5)
-        self.batch_size = 512
+        self.training_steps = 100000
+        self.checkpoint_interval = 1000
+        self.window_size = 100000
+        self.batch_size = 2048
+        self.device_name_tw = "cuda"
 
         self.weight_decay = 1e-4
         self.momentum = 0.9
@@ -32,9 +34,9 @@ class OthelloConfig(object):
         # Schedule
         self.learning_rate_schedule = {
             0: 2e-1,
-            10e3: 2e-2,
-            30e3: 2e-3,
-            50e3: 2e-4
+            10000: 2e-2,
+            30000: 2e-3,
+            50000: 2e-4
         }
 
         # Input

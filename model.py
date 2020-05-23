@@ -44,7 +44,7 @@ class Network(nn.Module):
             nn.ReLU()
         )
         self._residuals = nn.Sequential(
-            *[ResidualModule() for _ in range(4)]
+            *[ResidualModule() for _ in range(5)]
         )
         self._policy_head = nn.Sequential(
             nn.Conv2d(256, 2, kernel_size=1, stride=1, padding=0, bias=False),
