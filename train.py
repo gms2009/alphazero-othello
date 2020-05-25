@@ -28,6 +28,7 @@ def train(experiment: int, batch: int, resume: bool):
                                                 shared_state_dicts, replay_buffer, cfg.device_names_sp[i], cfg))
     print("Starting training...")
     training_worker.start()
+    evaluation_worker.start()
     for worker in self_play_workers:
         worker.start()
     print("Training started.")
@@ -50,7 +51,7 @@ def train(experiment: int, batch: int, resume: bool):
     except KeyboardInterrupt:
         print("KeyboardInterrupt, stopping training...")
     finally:
-        for i in range(cfg.num_self_play_workers + 1):
+        for i in range(cfg.num_self_play_workers * 5):
             message_queue.put(cfg.message_interrupt)
         training_worker.join()
         for worker in self_play_workers:

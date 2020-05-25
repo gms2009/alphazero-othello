@@ -209,6 +209,7 @@ class EvaluationWorker(Process):
             self._check_message_queue()
             if self._interrupted:
                 break
+            self._load_latest_network()
             az_player = AZPlayer(self._cfg, self._network, self._device)
             vmcts_player = VMCTSPlayer(self._cfg)
             az_turn = True if az_first else False
