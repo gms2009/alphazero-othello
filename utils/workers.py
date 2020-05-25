@@ -29,12 +29,13 @@ class SelfPlayWorker(Process):
         self._replay_buffer = replay_buffer
         self._cfg = cfg
         self._device = torch.device(device_name)
-        self._network = Network().to(self._device).eval()
+        self._network = Network()
         self._game = Othello(self._cfg)
         self._interrupted = False
 
     def run(self):
         print(super().name, "started.")
+        self._network.to(self._device).eval()
         while True:
             self._load_latest_network()
             self._game.reset()
@@ -98,7 +99,7 @@ class TrainingWorker(Process):
         self._cfg = cfg
         self._resume = resume
         self._device = torch.device(device_name)
-        self._network = Network().to(self._device).train()
+        self._network = Network()
         # noinspection PyUnresolvedReferences
         self._optim = torch.optim.RMSprop(
             self._network.parameters(), lr=self._cfg.learning_rate_schedule[1], weight_decay=self._cfg.weight_decay
@@ -108,6 +109,11 @@ class TrainingWorker(Process):
 
     def run(self):
         print(super().name, "started.")
+        self._network.to(self._device).train()
+        # noinspection PyUnresolvedReferences
+        self._optim = torch.optim.RMSprop(
+            self._network.parameters(), lr=self._cfg.learning_rate_schedule[1], weight_decay=self._cfg.weight_decay
+        )
         if self._resume:
             self._load_parameters()
         self._flush_network()
@@ -147,6 +153,7 @@ class TrainingWorker(Process):
             self._gs = pickle.load(f)
         self._network.load_state_dict(torch.load(self._cfg.dir_network, map_location=self._device))
         self._optim.load_state_dict(torch.load(self._cfg.dir_optim, map_location=self._device))
+        self._network.train()
         print("Parameters loaded successfully.")
 
     def _save_parameters(self):
@@ -195,12 +202,14 @@ class EvaluationWorker(Process):
         self._shared_state_dicts = shared_state_dicts
         self._cfg = cfg
         self._device = torch.device(device_name)
-        self._network = Network().to(self._device)
+        self._network = Network()
         self._gs = 1
         self._interrupted = False
         self._resume = resume
 
     def run(self):
+        print(super().name, "started.")
+        self._network.to(self._device)
         if self._resume:
             with open(self._cfg.dir_eval_gs, "rb") as f:
                 self._gs = pickle.load(f)
