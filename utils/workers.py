@@ -10,9 +10,10 @@ from torch.multiprocessing import Process, Queue
 
 from config import OthelloConfig
 from utils.game import Othello
+from utils.player import AZPlayer
 from utils.model import Network
-from utils.util import (ReplayBuffer, image_to_tensor, filter_legal_action_probs, Node, mcts,
-                        generate_training_data, calculate_loss)
+from utils.util import ReplayBuffer, image_to_tensor, Node, mcts, generate_training_data, calculate_loss
+from vmcts.vmcts import VMCTSPlayer
 
 
 class SelfPlayWorker(Process):
@@ -29,7 +30,7 @@ class SelfPlayWorker(Process):
         self._cfg = cfg
         self._device = torch.device(device_name)
         self._network = Network().to(self._device).eval()
-        self._game = Othello()
+        self._game = Othello(self._cfg)
         self._interrupted = False
 
     def run(self):
@@ -38,14 +39,7 @@ class SelfPlayWorker(Process):
             self._load_latest_network()
             self._game.reset()
             target_policies = []
-            state_tensor = image_to_tensor(self._game.make_input_image(self._cfg), self._device)
-            with torch.no_grad():
-                p, v = self._network.inference(state_tensor)
-                actions_mask = torch.as_tensor(self._game.legal_actions_mask(), dtype=torch.float32).to(self._device)
-                p = filter_legal_action_probs(p.unsqueeze(0), actions_mask.unsqueeze(0))
-                p.squeeze(0)
-            p, v = p.cpu().numpy(), v.cpu().numpy()
-            node = Node(self._cfg, self._game, p)
+            node, *_ = Node.get_new_node(self._cfg, self._game, self._network, self._device)
             while not self._game.is_terminal():
                 self._check_message_queue()
                 if self._interrupted:
@@ -53,7 +47,7 @@ class SelfPlayWorker(Process):
                 for _ in range(self._cfg.num_simulations):
                     mcts(node, self._cfg, self._network, self._device)
                 target_policy = node.get_policy()
-                action = int(target_policy.argmax())
+                action = node.select_optimal_action()
                 target_policies.append(target_policy)
                 child = node.child(action)
                 self._game = child.game()
@@ -72,6 +66,7 @@ class SelfPlayWorker(Process):
             if msg == self._cfg.message_interrupt:
                 self._interrupted = True
 
+    # noinspection DuplicatedCode
     def _load_latest_network(self):
         while True:
             try:
@@ -106,7 +101,7 @@ class TrainingWorker(Process):
         self._network = Network().to(self._device).train()
         # noinspection PyUnresolvedReferences
         self._optim = torch.optim.RMSprop(
-            self._network.parameters(), lr=self._cfg.learning_rate_schedule[30000], weight_decay=self._cfg.weight_decay
+            self._network.parameters(), lr=self._cfg.learning_rate_schedule[1], weight_decay=self._cfg.weight_decay
         )
         self._gs = 1
         self._interrupted = False
@@ -121,6 +116,7 @@ class TrainingWorker(Process):
             self._check_replay_buffer()
             if self._interrupted:
                 break
+            self._reschedule_lr()
             images, target_action_probs, target_values, action_masks = self._replay_buffer.sample_batch()
             images = image_to_tensor(images, self._device)
             target_action_probs = torch.as_tensor(target_action_probs, dtype=torch.float32).to(self._device)
@@ -133,6 +129,7 @@ class TrainingWorker(Process):
             self._optim.step()
             self._flush_network()
             log = {
+                type: "scalar",
                 "losses/policy_loss": policy_loss.item(),
                 "losses/value_loss": value_loss.item(),
                 "losses/total_loss": total_loss.item(),
@@ -158,6 +155,14 @@ class TrainingWorker(Process):
         torch.save(self._network.state_dict(), self._cfg.dir_network)
         torch.save(self._optim.state_dict(), self._cfg.dir_optim)
 
+    def _reschedule_lr(self):
+        if self._gs in self._cfg.learning_rate_schedule.keys():
+            # noinspection PyUnresolvedReferences
+            self._optim = torch.optim.RMSprop(
+                self._network.parameters(), lr=self._cfg.learning_rate_schedule[self._gs],
+                weight_decay=self._cfg.weight_decay
+            )
+
     def _flush_network(self):
         network_state_dict = self._network.state_dict()
         for k, v in network_state_dict.items():
@@ -172,6 +177,92 @@ class TrainingWorker(Process):
 
     def _check_replay_buffer(self):
         while self._replay_buffer.empty():
+            self._check_message_queue()
+            if self._interrupted:
+                return
+            time.sleep(1.0)
+
+
+class EvaluationWorker(Process):
+    def __init__(
+            self, name: str, message_queue: Queue, log_queue: Queue,
+            shared_state_dicts: Dict[str, Union[Dict[str, torch.Tensor], OrderedDict[str, torch.Tensor], int]],
+            device_name: str, cfg: OthelloConfig, resume: bool
+    ):
+        super().__init__(name=name)
+        self._message_queue = message_queue
+        self._log_queue = log_queue
+        self._shared_state_dicts = shared_state_dicts
+        self._cfg = cfg
+        self._device = torch.device(device_name)
+        self._network = Network().to(self._device)
+        self._gs = 1
+        self._interrupted = False
+        self._resume = resume
+
+    def run(self):
+        if self._resume:
+            with open(self._cfg.dir_eval_gs, "rb") as f:
+                self._gs = pickle.load(f)
+        az_first = True
+        while True:
+            self._check_message_queue()
+            if self._interrupted:
+                break
+            az_player = AZPlayer(self._cfg, self._network, self._device)
+            vmcts_player = VMCTSPlayer(self._cfg)
+            az_turn = True if az_first else False
+            while not az_player.game().is_terminal():
+                self._check_message_queue()
+                if self._interrupted:
+                    break
+                if az_turn:
+                    action = az_player.choose_action()
+                    az_player.play(action)
+                    vmcts_player.play(action)
+                    az_turn = False
+                else:
+                    action = vmcts_player.choose_action()
+                    vmcts_player.play(action)
+                    az_player.play(action)
+                    az_turn = True
+            if self._interrupted:
+                break
+            winner = az_player.game().winner()
+            if (az_first and winner == 0) or ((not az_first) and winner == 1):
+                az_score = 1
+            else:
+                az_score = -1
+            log = {
+                "type": "scalar",
+                "az_score": az_score,
+                "gs": self._gs
+            }
+            self._log_queue.put(log)
+            az_first = False if az_first else True
+            self._gs = self._gs + 1
+            with open(self._cfg.dir_eval_gs, "wb") as f:
+                pickle.dump(self._gs, f)
+        print(super().name, "terminated.")
+
+    def _check_message_queue(self):
+        if not self._message_queue.empty():
+            msg = self._message_queue.get()
+            if msg == self._cfg.message_interrupt:
+                self._interrupted = True
+
+    # noinspection DuplicatedCode
+    def _load_latest_network(self):
+        while True:
+            try:
+                state_dict = self._shared_state_dicts["network"]
+                for k, v in state_dict.items():
+                    state_dict[k] = v.to(self._device)
+                self._network.load_state_dict(state_dict)
+                self._network.eval()
+                return
+            except KeyError:
+                pass
             self._check_message_queue()
             if self._interrupted:
                 return

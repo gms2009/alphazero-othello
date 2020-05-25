@@ -3,7 +3,8 @@ from torch.multiprocessing import Manager, Queue
 from torch.utils.tensorboard import SummaryWriter
 
 from config import OthelloConfig
-from utils.util import ReplayBuffer, SelfPlayWorker, TrainingWorker
+from utils.util import ReplayBuffer
+from utils.workers import SelfPlayWorker, TrainingWorker, EvaluationWorker
 
 
 def train(experiment: int, batch: int, resume: bool):
@@ -13,10 +14,14 @@ def train(experiment: int, batch: int, resume: bool):
     replay_buffer = ReplayBuffer(buffer)
     shared_state_dicts = manager.dict()
     message_queue = Queue()
-    log_queue = Queue()  # a single log is dictionary
+    log_queue = Queue()  # a single log is dictionary and "gs", "type" keys are must
     writer = SummaryWriter(cfg.dir_log)
-    training_worker = TrainingWorker("Training Worker", message_queue, log_queue, shared_state_dicts, replay_buffer,
-                                     cfg.device_name_tw, cfg, resume)
+    training_worker = TrainingWorker(
+        "Training Worker", message_queue, log_queue, shared_state_dicts, replay_buffer, cfg.device_name_tw, cfg, resume
+    )
+    evaluation_worker = EvaluationWorker(
+        "Evaluation Worker", message_queue, log_queue, shared_state_dicts, cfg.device_name_ew, cfg, resume
+    )
     self_play_workers = []
     for i in range(cfg.num_self_play_workers):
         self_play_workers.append(SelfPlayWorker("Self-Play Worker-" + str(i), message_queue, log_queue,
@@ -35,7 +40,12 @@ def train(experiment: int, batch: int, resume: bool):
             for k, v in log.items():
                 if k is "gs":
                     continue
-                writer.add_scalar(k, v, log["gs"])
+                if log["type"] == "scalar":
+                    writer.add_scalar(k, v, log["gs"])
+                elif log["type"] == "histogram":
+                    writer.add_histogram(k, v, log["gs"])
+                else:
+                    print("Unknown log type found:", log["type"])
             del log
     except KeyboardInterrupt:
         print("KeyboardInterrupt, stopping training...")

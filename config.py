@@ -5,8 +5,6 @@ class OthelloConfig(object):
     def __init__(self, experiment: int = 1, batch: int = 1):
         self.white_piece = "□"
         self.black_piece = "■"
-        self.move_piece = "*"
-        self.empty_piece = "-"
         # Self-Play
         self.num_self_play_workers = 10
         self.max_moves = 512
@@ -37,7 +35,7 @@ class OthelloConfig(object):
 
         # Schedule
         self.learning_rate_schedule = {
-            0: 2e-1,
+            1: 2e-1,
             10000: 2e-2,
             30000: 2e-3,
             50000: 2e-4
@@ -63,7 +61,12 @@ class OthelloConfig(object):
         self.dir_gs = os.path.join(self.dir_saved_models, "gs.pkl")
         self.dir_network = os.path.join(self.dir_saved_models, "network.pt")
         self.dir_optim = os.path.join(self.dir_saved_models, "optim.pt")
+        self.dir_eval_gs = os.path.join(self.dir_saved_models, "eval_gs.pkl")
+
+        # EvaluationWorker
+        self.num_simulations_ew = 500
+        self.device_name_ew = "cpu"
 
         # Vanilla MCTS
         self.vmcts_c_uct = 1.414
-        self.vmcts_num_simulations = 500
+        self.num_simulations_vmcts = 500

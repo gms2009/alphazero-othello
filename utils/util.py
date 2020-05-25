@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Tuple, Union, OrderedDict, Dict
+from typing import List, Tuple, Union
 
 from collections import deque
 import numpy as np
@@ -67,6 +67,11 @@ class Node(object):
         action = int(puct.argmax())
         return action
 
+    def select_optimal_action(self) -> int:
+        target_policy = self.get_policy()
+        action = int(target_policy.argmax())
+        return action
+
     def get_policy(self) -> np.ndarray:
         tau = self._cfg.tau_initial if len(self._game) <= self._cfg.num_sampling_moves else self._cfg.tau_final
         n = self._N ** tau
@@ -79,6 +84,20 @@ class Node(object):
         self._W[action] += returns[self._game.current_player()]
         self._N[action] += 1
         self._Q[action] = self._W[action] / self._N[action]
+
+    @staticmethod
+    def get_new_node(
+            cfg: OthelloConfig, game: Othello, network: Network, device: torch.device
+    ) -> Tuple[Node, np.ndarray, np.ndarray]:
+        state_tensor = image_to_tensor(game.make_input_image(), device)
+        with torch.no_grad():
+            p, v = network.inference(state_tensor)
+            actions_mask = torch.as_tensor(game.legal_actions_mask(), dtype=torch.float32).to(device)
+            p = filter_legal_action_probs(p.unsqueeze(0), actions_mask.unsqueeze(0))
+            p.squeeze(0)
+        p, v = p.cpu().numpy(), v.cpu().numpy()
+        new_node = Node(cfg, game, p)
+        return new_node, p, v
 
 
 def image_to_tensor(image: np.ndarray, device: torch.device) -> torch.Tensor:
@@ -142,14 +161,7 @@ def mcts(node: Node, cfg: OthelloConfig, network: Network, device: torch.device)
         child = Node(cfg, child_game, p)  # create an empty node. It will never be in training data.
         node.update_child(child, action)
         return returns
-    state_tensor = image_to_tensor(child_game.make_input_image(cfg), device)
-    with torch.no_grad():
-        p, v = network.inference(state_tensor)
-        actions_mask = torch.as_tensor(child_game.legal_actions_mask(), dtype=torch.float32).to(device)
-        p = filter_legal_action_probs(p.unsqueeze(0), actions_mask.unsqueeze(0))
-        p.squeeze(0)
-    p, v = p.cpu().numpy(), v.cpu().numpy()
-    child = Node(cfg, child_game, p)
+    child, p, v = Node.get_new_node(cfg, child_game, network, device)
     node.update_child(child, action)
     returns = np.empty(2, dtype=np.float32)
     returns[child_game.current_player()] = v

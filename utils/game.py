@@ -7,19 +7,24 @@ from config import OthelloConfig
 
 
 class Othello(object):
-    def __init__(self):
+    def __init__(self, cfg: OthelloConfig):
+        self._cfg = cfg
         self._game = pyspiel.load_game("othello")
         self._state = self._game.new_initial_state()
         self._history = []  # list of [state, current_player, action]
 
     def __str__(self):
-        return self._state.__str__()
+        rep = self._state.__str__()
+        rep = rep.replace("x", self._cfg.black_piece)
+        rep = rep.replace("o", self._cfg.white_piece)
+        rep = rep.replace("t" + self._cfg.white_piece, "to")
+        return rep
 
     def __len__(self) -> int:
         return len(self._history)
 
     def clone(self) -> Othello:
-        g = Othello()
+        g = Othello(self._cfg)
         g._state = self._state.clone()
         history = list(self._history)
         for i in range(len(history)):
@@ -73,17 +78,23 @@ class Othello(object):
     def returns(self) -> np.ndarray:
         return np.array(self._state.returns()).astype(np.float32)
 
-    def make_input_image(self, cfg: OthelloConfig) -> np.ndarray:
-        image = np.zeros((cfg.total_input_channels, 8, 8), dtype=np.bool)
+    def winner(self) -> int:
+        if not self.is_terminal():
+            return -1
+        returns = self._game.returns()
+        return int(np.argmax(returns))
+
+    def make_input_image(self) -> np.ndarray:
+        image = np.zeros((self._cfg.total_input_channels, 8, 8), dtype=np.bool)
         image[-1] += bool(self.current_player())
         temp = self.current_state()
         image[0] += temp[0]
-        image[cfg.num_history_states + 0] += temp[1]
-        for i in range(1, cfg.num_history_states + 1):
+        image[self._cfg.num_history_states + 0] += temp[1]
+        for i in range(1, self._cfg.num_history_states + 1):
             try:
                 temp = self.history_state(-i)
                 image[i] += temp[0]
-                image[cfg.num_history_states + i] += temp[1]
+                image[self._cfg.num_history_states + i] += temp[1]
             except IndexError:
                 break
         return image
