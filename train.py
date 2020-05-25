@@ -3,7 +3,7 @@ from torch.multiprocessing import Manager, Queue
 from torch.utils.tensorboard import SummaryWriter
 
 from config import OthelloConfig
-from util import ReplayBuffer, SelfPlayWorker, TrainingWorker
+from utils.util import ReplayBuffer, SelfPlayWorker, TrainingWorker
 
 
 def train(experiment: int, batch: int, resume: bool):

@@ -3,6 +3,10 @@ import os
 
 class OthelloConfig(object):
     def __init__(self, experiment: int = 1, batch: int = 1):
+        self.white_piece = "□"
+        self.black_piece = "■"
+        self.move_piece = "*"
+        self.empty_piece = "-"
         # Self-Play
         self.num_self_play_workers = 10
         self.max_moves = 512
@@ -59,3 +63,7 @@ class OthelloConfig(object):
         self.dir_gs = os.path.join(self.dir_saved_models, "gs.pkl")
         self.dir_network = os.path.join(self.dir_saved_models, "network.pt")
         self.dir_optim = os.path.join(self.dir_saved_models, "optim.pt")
+
+        # Vanilla MCTS
+        self.vmcts_c_uct = 1.414
+        self.vmcts_num_simulations = 500
