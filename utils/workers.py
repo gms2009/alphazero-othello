@@ -59,6 +59,8 @@ class SelfPlayWorker(Process):
             target_policies = np.array(target_policies).astype(np.float32)
             training_data = generate_training_data(self._cfg, self._game, target_policies, final_returns)
             self._replay_buffer.save_training_data(training_data)
+            if self._cfg.debug:
+                print(super().name, "completed one simulation.")
         print(super().name, "terminated.")
 
     def _check_message_queue(self):
@@ -145,6 +147,8 @@ class TrainingWorker(Process):
             self._gs = self._gs + 1
             if epoch % self._cfg.checkpoint_interval == 0:
                 self._save_parameters()
+            if self._cfg.debug:
+                print(log)
         print(super().name, "terminated.")
 
     def _load_parameters(self):
@@ -253,6 +257,8 @@ class EvaluationWorker(Process):
             self._gs = self._gs + 1
             with open(self._cfg.dir_eval_gs, "wb") as f:
                 pickle.dump(self._gs, f)
+            if self._cfg.debug:
+                print(log)
         print(super().name, "terminated.")
 
     def _check_message_queue(self):

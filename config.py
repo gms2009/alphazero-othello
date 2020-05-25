@@ -3,6 +3,8 @@ import os
 
 class OthelloConfig(object):
     def __init__(self, experiment: int = 1, batch: int = 1):
+        self.debug = True
+
         self.white_piece = "□"
         self.black_piece = "■"
         # Self-Play
