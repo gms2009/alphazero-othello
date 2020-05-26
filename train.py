@@ -53,6 +53,7 @@ def train(experiment: int, batch: int, resume: bool):
                     try:
                         writer.add_scalar(k, v, log["gs"])
                     except NameError:
+                        print("NameError occurred $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
                         print(k, v)
                 else:
                     print("Unknown log type found:", log["type"])

@@ -10,7 +10,7 @@ class OthelloConfig(object):
         # Self-Play
         self.num_self_play_workers = 5
         self.max_moves = 512
-        self.num_simulations = 400
+        self.num_simulations = 10
         self.device_names_sp = ["cuda"] * self.num_self_play_workers
 
         # Root prior exploration noise
