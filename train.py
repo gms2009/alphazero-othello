@@ -50,9 +50,10 @@ def train(experiment: int, batch: int, resume: bool):
                 if k in ["gs", "type"]:
                     continue
                 if log["type"] == "scalar":
-                    writer.add_scalar(k, v, log["gs"])
-                elif log["type"] == "histogram":
-                    writer.add_histogram(k, v, log["gs"])
+                    try:
+                        writer.add_scalar(k, v, log["gs"])
+                    except NameError:
+                        print(k, v)
                 else:
                     print("Unknown log type found:", log["type"])
             del log
