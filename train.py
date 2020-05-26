@@ -47,7 +47,7 @@ def train(experiment: int, batch: int, resume: bool):
                 continue
             log = log_queue.get()
             for k, v in log.items():
-                if k is "gs":
+                if k in ["gs", "type"]:
                     continue
                 if log["type"] == "scalar":
                     writer.add_scalar(k, v, log["gs"])
