@@ -11,7 +11,7 @@ class OthelloConfig(object):
         self.num_self_play_workers = 5
         self.max_moves = 512
         self.num_simulations = 400
-        self.device_names_sp = ["cpu"] * self.num_self_play_workers
+        self.device_names_sp = ["cuda"] * self.num_self_play_workers
 
         # Root prior exploration noise
         self.root_dirichlet_alpha = 0.5
@@ -37,10 +37,10 @@ class OthelloConfig(object):
 
         # Schedule
         self.learning_rate_schedule = {
-            1: 2e-1,
-            10000: 2e-2,
+            1: 4e-3,
+            10000: 3e-3,
             30000: 2e-3,
-            50000: 2e-4
+            50000: 1e-3
         }
 
         # Input
