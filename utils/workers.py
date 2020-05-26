@@ -38,6 +38,7 @@ class SelfPlayWorker(Process):
         self._network.to(self._device).eval()
         while True:
             self._load_latest_network()
+            t1 = time.time()
             self._game.reset()
             target_policies = []
             node, *_ = Node.get_new_node(self._cfg, self._game, self._network, self._device)
@@ -59,8 +60,9 @@ class SelfPlayWorker(Process):
             target_policies = np.array(target_policies).astype(np.float32)
             training_data = generate_training_data(self._cfg, self._game, target_policies, final_returns)
             self._replay_buffer.save_training_data(training_data)
+            t2 = time.time()
             if self._cfg.debug:
-                print(super().name, "completed one simulation.")
+                print(super().name, "completed one simulation in", t2 - t1, "seconds.")
         print(super().name, "terminated.")
 
     def _check_message_queue(self):
@@ -124,6 +126,7 @@ class TrainingWorker(Process):
             self._check_replay_buffer()
             if self._interrupted:
                 break
+            t1 = time.time()
             self._reschedule_lr()
             images, target_action_probs, target_values, action_masks = self._replay_buffer.sample_batch()
             images = image_to_tensor(images, self._device)
@@ -137,7 +140,7 @@ class TrainingWorker(Process):
             self._optim.step()
             self._flush_network()
             log = {
-                type: "scalar",
+                "type": "scalar",
                 "losses/policy_loss": policy_loss.item(),
                 "losses/value_loss": value_loss.item(),
                 "losses/total_loss": total_loss.item(),
@@ -147,7 +150,9 @@ class TrainingWorker(Process):
             self._gs = self._gs + 1
             if epoch % self._cfg.checkpoint_interval == 0:
                 self._save_parameters()
+            t2 = time.time()
             if self._cfg.debug:
+                print("One training epoch completed in", t2 - t1, "seconds.")
                 print(log)
         print(super().name, "terminated.")
 
@@ -219,10 +224,10 @@ class EvaluationWorker(Process):
                 self._gs = pickle.load(f)
         az_first = True
         while True:
-            self._check_message_queue()
+            self._load_latest_network()
             if self._interrupted:
                 break
-            self._load_latest_network()
+            t1 = time.time()
             az_player = AZPlayer(self._cfg, self._network, self._device)
             vmcts_player = VMCTSPlayer(self._cfg)
             az_turn = True if az_first else False
@@ -257,7 +262,9 @@ class EvaluationWorker(Process):
             self._gs = self._gs + 1
             with open(self._cfg.dir_eval_gs, "wb") as f:
                 pickle.dump(self._gs, f)
+            t2 = time.time()
             if self._cfg.debug:
+                print(super().name, "completed one evaluation round in", t2 - t1, "seconds.")
                 print(log)
         print(super().name, "terminated.")
 
