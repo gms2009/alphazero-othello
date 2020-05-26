@@ -63,6 +63,7 @@ class OthelloConfig(object):
         self.dir_gs = os.path.join(self.dir_saved_models, "gs.pkl")
         self.dir_network = os.path.join(self.dir_saved_models, "network.pt")
         self.dir_optim = os.path.join(self.dir_saved_models, "optim.pt")
+        self.dir_replay_buffer = os.path.join(self.dir_saved_models, "replay_buffer.pkl")
         self.dir_eval_gs = os.path.join(self.dir_saved_models, "eval_gs.pkl")
 
         # EvaluationWorker

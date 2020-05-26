@@ -1,3 +1,4 @@
+import pickle
 import time
 from torch.multiprocessing import Manager, Queue
 from torch.utils.tensorboard import SummaryWriter
@@ -16,6 +17,13 @@ def train(experiment: int, batch: int, resume: bool):
     message_queue = Queue()
     log_queue = Queue()  # a single log is dictionary and "gs", "type" keys are must
     writer = SummaryWriter(cfg.dir_log)
+    if resume:
+        print("Loading replay buffer to resume training...")
+        with open(cfg.dir_replay_buffer, "rb") as f:
+            buff_list = pickle.load(f)
+        replay_buffer.save_training_data(buff_list)
+        del buff_list
+        print("Replay buffer loaded.")
     training_worker = TrainingWorker(
         "Training Worker", message_queue, log_queue, shared_state_dicts, replay_buffer, cfg.device_name_tw, cfg, resume
     )
@@ -56,6 +64,12 @@ def train(experiment: int, batch: int, resume: bool):
         training_worker.join()
         for worker in self_play_workers:
             worker.join()
+        print("Saving replay buffer...")
+        buff_list = list(buffer)
+        with open(cfg.dir_replay_buffer, "wb") as f:
+            pickle.dump(buff_list, f)
+        del buff_list
+        print("Replay buffer saved.")
 
 
 if __name__ == "__main__":
