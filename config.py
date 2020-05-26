@@ -8,9 +8,9 @@ class OthelloConfig(object):
         self.white_piece = "□"
         self.black_piece = "■"
         # Self-Play
-        self.num_self_play_workers = 10
+        self.num_self_play_workers = 5
         self.max_moves = 512
-        self.num_simulations = 800
+        self.num_simulations = 400
         self.device_names_sp = ["cpu"] * self.num_self_play_workers
 
         # Root prior exploration noise
@@ -29,7 +29,7 @@ class OthelloConfig(object):
         self.training_steps = 100000
         self.checkpoint_interval = 1000
         self.window_size = 100000
-        self.batch_size = 2048
+        self.batch_size = 512
         self.device_name_tw = "cuda"
 
         self.weight_decay = 1e-4
