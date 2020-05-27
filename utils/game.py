@@ -81,10 +81,10 @@ class Othello(object):
     def winner(self) -> int:
         if not self.is_terminal():
             return -1
-        returns = self._game.returns()
-        if returns[0] == returns[1]:
+        ret = self.returns()
+        if ret[0] == ret[1]:
             return 2
-        return int(np.argmax(returns))
+        return int(np.argmax(ret))
 
     def make_input_image(self) -> np.ndarray:
         image = np.zeros((self._cfg.total_input_channels, 8, 8), dtype=np.bool)
