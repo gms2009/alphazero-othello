@@ -71,7 +71,7 @@ class OthelloConfig(object):
 
         # Vanilla MCTS
         self.vmcts_c_uct = 1.414
-        self.num_simulations_vmcts = 600
+        self.num_simulations_vmcts = 500
 
         # Evaluation
         self.num_simulations_eval_player = 500

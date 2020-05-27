@@ -37,7 +37,7 @@ def evaluate(vs: str, games: int, experiment: int, batch: int):
                 action = p1.choose_action()
                 az_turn = False
             else:
-                print(p1.name(), " turn. Choosing action...")
+                print(p2.name(), " turn. Choosing action...")
                 action = p2.choose_action()
                 az_turn = True
             print("Chosen action:", action)
