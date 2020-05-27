@@ -2,4 +2,3 @@
 **/__pycache__
 **/.idea
 **/saved_models/experiment-1-batch-1/replay_buffer.pkl
-**/logs
