@@ -74,8 +74,8 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--experiment", type=int)
-    parser.add_argument("--batch", type=int)
+    parser.add_argument("--experiment", type=int, required=True)
+    parser.add_argument("--batch", type=int, required=True)
     parser.add_argument("--resume", type=bool, default=False)
     args = parser.parse_args()
     train(args.experiment, args.batch, args.resume)

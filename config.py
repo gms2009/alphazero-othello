@@ -26,7 +26,7 @@ class OthelloConfig(object):
         self.num_sampling_moves = 10
 
         # Training
-        self.training_steps = 100000
+        self.training_steps = 200000
         self.checkpoint_interval = 1000
         self.window_size = 100000
         self.batch_size = 512
@@ -68,8 +68,11 @@ class OthelloConfig(object):
 
         # EvaluationWorker
         self.num_simulations_ew = 500
-        self.device_name_ew = "cpu"
+        self.device_name_ew = "cuda"
 
         # Vanilla MCTS
         self.vmcts_c_uct = 1.414
-        self.num_simulations_vmcts = 500
+        self.num_simulations_vmcts = 600
+
+        # Evaluation
+        self.device_name_eval_player = "cuda"

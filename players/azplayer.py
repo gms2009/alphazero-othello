@@ -8,12 +8,16 @@ from utils.util import Node, mcts
 
 class AZPlayer(object):
     def __init__(self, cfg: OthelloConfig, network: Network, device: torch.device):
+        self._name = "AlphaZero"
         self._cfg = cfg
         self._network = network
         self._network.eval()
         self._device = device
         self._game = Othello(self._cfg)
         self._node, *_ = Node.get_new_node(self._cfg, self._game, self._network, self._device)
+
+    def name(self) -> str:
+        return self._name
 
     def game(self) -> Othello:
         return self._game

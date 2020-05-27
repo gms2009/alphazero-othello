@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 from typing import Union, OrderedDict, Dict
 
 import numpy as np
@@ -9,11 +8,11 @@ import torch
 from torch.multiprocessing import Process, Queue
 
 from config import OthelloConfig
+from players.azplayer import AZPlayer
 from utils.game import Othello
-from utils.player import AZPlayer
 from utils.model import Network
 from utils.util import ReplayBuffer, image_to_tensor, Node, mcts, generate_training_data, calculate_loss
-from vmcts.vmcts import VMCTSPlayer
+from players.vmctsplayer import VMCTSPlayer
 
 
 class SelfPlayWorker(Process):
@@ -248,7 +247,9 @@ class EvaluationWorker(Process):
             if self._interrupted:
                 break
             winner = az_player.game().winner()
-            if (az_first and winner == 0) or ((not az_first) and winner == 1):
+            if winner == 2:
+                az_score = 0
+            elif (az_first and winner == 0) or ((not az_first) and winner == 1):
                 az_score = 1
             else:
                 az_score = -1

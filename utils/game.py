@@ -82,6 +82,8 @@ class Othello(object):
         if not self.is_terminal():
             return -1
         returns = self._game.returns()
+        if returns[0] == returns[1]:
+            return 2
         return int(np.argmax(returns))
 
     def make_input_image(self) -> np.ndarray:
