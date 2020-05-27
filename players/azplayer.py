@@ -29,7 +29,7 @@ class AZPlayer(object):
         if child_node is None:
             child_game = self._game.clone()
             child_game.apply_action(action)
-            child_node, *_ = Node.get_new_node(self._cfg, self._game, self._network, self._device)
+            child_node, *_ = Node.get_new_node(self._cfg, child_game, self._network, self._device)
         self._node = child_node
         self._game = self._node.game()
 
