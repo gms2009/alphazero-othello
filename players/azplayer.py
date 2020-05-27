@@ -36,7 +36,7 @@ class AZPlayer(object):
     def choose_action(self) -> int:
         if self._game.is_terminal():
             return -1
-        for sim in range(self._cfg.num_simulations_ew):
+        for sim in range(self._cfg.num_simulations_eval_player):
             mcts(self._node, self._cfg, self._network, self._device)
         action = self._node.select_optimal_action()
         return action

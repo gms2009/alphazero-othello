@@ -67,7 +67,6 @@ class OthelloConfig(object):
         self.dir_eval_gs = os.path.join(self.dir_saved_models, "eval_gs.pkl")
 
         # EvaluationWorker
-        self.num_simulations_ew = 500
         self.device_name_ew = "cuda"
 
         # Vanilla MCTS
@@ -75,4 +74,5 @@ class OthelloConfig(object):
         self.num_simulations_vmcts = 600
 
         # Evaluation
+        self.num_simulations_eval_player = 500
         self.device_name_eval_player = "cuda"

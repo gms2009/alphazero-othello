@@ -62,8 +62,8 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--vs", type=str, choices=player_choices, required=True)
     parser.add_argument("--games", type=int, default=5)
+    parser.add_argument("--vs", type=str, choices=player_choices, required=True)
     parser.add_argument("--experiment", type=int, required=True)
     parser.add_argument("--batch", type=int, required=True)
     args = parser.parse_args()
