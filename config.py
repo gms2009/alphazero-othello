@@ -18,11 +18,11 @@ class OthelloConfig(object):
         self.root_exploration_fraction = 0.25
 
         # UCB formula
-        self.ucb_c_puct = 4
+        self.ucb_c_puct = 2
 
         # Target policy params
-        self.tau_initial = 1
-        self.tau_final = 0.01
+        self.tau_initial = 1.0
+        self.tau_final = 0.1
         self.num_sampling_moves = 10
 
         # Training

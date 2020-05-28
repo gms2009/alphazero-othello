@@ -73,7 +73,7 @@ class Node(object):
 
     def get_policy(self) -> np.ndarray:
         tau = self._cfg.tau_initial if len(self._game) <= self._cfg.num_sampling_moves else self._cfg.tau_final
-        n = self._N ** tau
+        n = self._N ** (1/tau)
         if n.sum() == 0:
             n += 1e-8
         policy = n / n.sum()

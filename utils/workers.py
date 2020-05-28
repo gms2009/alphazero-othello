@@ -229,7 +229,7 @@ class EvaluationWorker(Process):
             t1 = time.time()
             az_player = AZPlayer(self._cfg, self._network, self._device)
             vmcts_player = VMCTSPlayer(self._cfg)
-            az_turn = True if az_first else False
+            az_turn = az_first
             while not az_player.game().is_terminal():
                 self._check_message_queue()
                 if self._interrupted:

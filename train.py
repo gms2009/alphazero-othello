@@ -60,6 +60,7 @@ def train(experiment: int, batch: int, resume: bool):
         for i in range(cfg.num_self_play_workers * 5):
             message_queue.put(cfg.message_interrupt)
         training_worker.join()
+        evaluation_worker.join()
         for worker in self_play_workers:
             worker.join()
         print("Saving replay buffer...")
